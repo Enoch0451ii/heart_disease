@@ -7,7 +7,7 @@ from sklearn.metrics import accuracy_score
 import pickle
 
 # Load the dataset
-data = pd.read_csv('project\Heart\heart_disease_data.csv')
+data = pd.read_csv('project/Heart/heart_disease_data.csv')
 
 # Preprocess the data
 X = data.drop(columns='target', axis=1)
