@@ -28,6 +28,7 @@ if 'age' not in st.session_state:
 # ----------------------------
 # Load model
 # ----------------------------@st.cache_resource
+@st.cache_resource
 def load_model():
     try:
         model_path = "heart_disease_model.pkl"
@@ -42,11 +43,25 @@ def load_model():
         with open(model_path, "rb") as f:
             model_data = pickle.load(f)
         
-        # Rest of your loading code...
+        # Handle different model data structures
+        if isinstance(model_data, dict):
+            model = model_data.get('model')
+            feature_names = model_data.get('feature_names')
+            test_accuracy = model_data.get('test_accuracy', 0.81)  # Use your 81% accuracy
+        else:
+            model = model_data
+            feature_names = None
+            test_accuracy = 0.81  # Your trained accuracy
+        
+        if model is not None:
+            st.sidebar.success(f"✅ Model loaded ({test_accuracy:.1%} accuracy)")
+        else:
+            st.error("❌ Model could not be loaded from the file")
+            
         return model, feature_names, test_accuracy
     
     except Exception as e:
-        st.error(f"❌ Error: {e}")
+        st.error(f"❌ Error loading model: {e}")
         return None, None, None
 
 model, feature_names, model_accuracy = load_model()
