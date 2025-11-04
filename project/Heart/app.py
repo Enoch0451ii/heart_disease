@@ -31,15 +31,28 @@ if 'age' not in st.session_state:
 @st.cache_resource
 def load_model():
     try:
-        # Use relative path instead of absolute path
-        model_path = "heart_disease_model.pkl"
+        # Debug information
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        model_path = os.path.join(current_dir, "heart_disease_model.pkl")
+        
+        st.sidebar.write(f"🔍 Looking for model at: {model_path}")
+        
+        # List all files in current directory
+        files = os.listdir(current_dir)
+        st.sidebar.write("📁 Files in app directory:")
+        for file in files:
+            st.sidebar.write(f" - {file}")
+        
         if not os.path.exists(model_path):
-            st.error("❌ Model file not found. Please ensure 'heart_disease_model.pkl' is in the same directory!")
+            st.error(f"❌ Model file not found!")
+            st.error(f"📁 Current directory: {current_dir}")
+            st.error(f"📁 Available files: {files}")
             return None, None, None
         
         with open(model_path, "rb") as f:
             model_data = pickle.load(f)
         
+        # Rest of your existing code...
         # Handle different model data structures
         if isinstance(model_data, dict):
             model = model_data.get('model')
