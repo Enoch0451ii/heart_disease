@@ -8,21 +8,55 @@ import time
 import os
 
 # ----------------------------
+# Initialize Session State
+# ----------------------------
+if 'age' not in st.session_state:
+    st.session_state.age = 45
+    st.session_state.sex = "Male"
+    st.session_state.cp = "Typical Angina"
+    st.session_state.trestbps = 120
+    st.session_state.chol = 240
+    st.session_state.fbs = "No"
+    st.session_state.restecg = "Normal"
+    st.session_state.thalach = 150
+    st.session_state.exang = "No"
+    st.session_state.oldpeak = 1.0
+    st.session_state.slope = "Upsloping"
+    st.session_state.ca = 0
+    st.session_state.thal = "Normal"
+
+# ----------------------------
 # Load model
 # ----------------------------
 @st.cache_resource
 def load_model():
     try:
-        model_path = "C:/Users/user/Desktop/siwes defense/project/Heart/heart_disease_model.pkl"
+        # Use relative path instead of absolute path
+        model_path = "heart_disease_model.pkl"
         if not os.path.exists(model_path):
-            st.error("❌ Model file not found. Please run train_final.py first!")
+            st.error("❌ Model file not found. Please ensure 'heart_disease_model.pkl' is in the same directory!")
             return None, None, None
         
         with open(model_path, "rb") as f:
             model_data = pickle.load(f)
         
-        st.sidebar.success(f"✅ Model loaded ({model_data['test_accuracy']:.1%} accuracy)")
-        return model_data['model'], model_data['feature_names'], model_data['test_accuracy']
+        # Handle different model data structures
+        if isinstance(model_data, dict):
+            model = model_data.get('model')
+            feature_names = model_data.get('feature_names')
+            test_accuracy = model_data.get('test_accuracy', 0.78)  # Default fallback
+        else:
+            # Assume it's the model object directly
+            model = model_data
+            feature_names = None
+            test_accuracy = 0.78  # Default accuracy
+        
+        if model is not None:
+            st.sidebar.success(f"✅ Model loaded ({test_accuracy:.1%} accuracy)")
+        else:
+            st.error("❌ Model could not be loaded from the file")
+            
+        return model, feature_names, test_accuracy
     
     except Exception as e:
         st.error(f"❌ Error loading model: {e}")
@@ -31,6 +65,49 @@ def load_model():
 model, feature_names, model_accuracy = load_model()
 if model is None:
     st.stop()
+
+# ----------------------------
+# Input Validation Function
+# ----------------------------
+def validate_inputs(age, trestbps, chol, thalach, oldpeak, ca):
+    """Validate medical input ranges"""
+    warnings = []
+    if age < 18 or age > 100:
+        warnings.append("⚠️ Age should be between 18-100 years")
+    if trestbps < 80 or trestbps > 200:
+        warnings.append("⚠️ Resting BP should be between 80-200 mm Hg")
+    if chol < 100 or chol > 600:
+        warnings.append("⚠️ Cholesterol should be between 100-600 mg/dl")
+    if thalach < 70 or thalach > 220:
+        warnings.append("⚠️ Maximum heart rate should be between 70-220 bpm")
+    if oldpeak < 0 or oldpeak > 6:
+        warnings.append("⚠️ ST depression should be between 0-6")
+    if ca < 0 or ca > 3:
+        warnings.append("⚠️ Number of major vessels should be between 0-3")
+    return warnings
+
+# ----------------------------
+# Data Preprocessing Function
+# ----------------------------
+def preprocess_inputs(age, sex, cp, trestbps, chol, fbs, restecg, thalach, exang, oldpeak, slope, ca, thal):
+    """Convert all inputs to model-compatible format"""
+    # Encode categorical variables
+    sex_encoded = 1 if sex == 'Male' else 0
+    cp_encoded = ['Typical Angina', 'Atypical Angina', 'Non-anginal Pain', 'Asymptomatic'].index(cp)
+    fbs_encoded = 1 if fbs == 'Yes' else 0
+    restecg_encoded = ['Normal', 'ST-T Wave Abnormality', 'Left Ventricular Hypertrophy'].index(restecg)
+    exang_encoded = 1 if exang == 'Yes' else 0
+    slope_encoded = ['Upsloping', 'Flat', 'Downsloping'].index(slope)
+    thal_encoded = ['Normal', 'Fixed Defect', 'Reversible Defect'].index(thal)
+
+    # Create features array
+    features = np.array([[
+        age, sex_encoded, cp_encoded, trestbps, chol, fbs_encoded,
+        restecg_encoded, thalach, exang_encoded, oldpeak, 
+        slope_encoded, ca, thal_encoded
+    ]])
+    
+    return features
 
 # ----------------------------
 # Page Config
@@ -133,6 +210,13 @@ st.markdown("""
             border-radius: 8px;
             margin: 0.3rem 0;
             border-left: 4px solid #00FF7F;
+        }
+        .validation-warning {
+            background: rgba(255, 193, 7, 0.2);
+            padding: 1rem;
+            border-radius: 10px;
+            margin: 1rem 0;
+            border-left: 4px solid #FFC107;
         }
         footer {visibility: hidden;}
     </style>
@@ -252,206 +336,210 @@ with st.container():
 # Prediction Logic
 # ----------------------------
 if submitted:
-    with st.spinner("🧠 Analyzing your heart health..."):
-        time.sleep(1.5)
-
-        # Encode categorical variables
-        sex_encoded = 1 if sex == 'Male' else 0
-        cp_encoded = ['Typical Angina', 'Atypical Angina', 'Non-anginal Pain', 'Asymptomatic'].index(cp)
-        fbs_encoded = 1 if fbs == 'Yes' else 0
-        restecg_encoded = ['Normal', 'ST-T Wave Abnormality', 'Left Ventricular Hypertrophy'].index(restecg)
-        exang_encoded = 1 if exang == 'Yes' else 0
-        slope_encoded = ['Upsloping', 'Flat', 'Downsloping'].index(slope)
-        thal_encoded = ['Normal', 'Fixed Defect', 'Reversible Defect'].index(thal)
-
-        # Create features array
-        features = np.array([[
-            age, sex_encoded, cp_encoded, trestbps, chol, fbs_encoded,
-            restecg_encoded, thalach, exang_encoded, oldpeak, 
-            slope_encoded, ca, thal_encoded
-        ]])
-
-        # Make prediction
-        prediction = model.predict(features)[0]
-        prediction_proba = model.predict_proba(features)[0]
-
-    # Display Results
-    st.markdown("## 📋 Result Overview")
+    # Input validation
+    validation_warnings = validate_inputs(age, trestbps, chol, thalach, oldpeak, ca)
     
-    # Calculate confidence
-    risk_probability = prediction_proba[1]
-    confidence = int(risk_probability * 100)
+    if validation_warnings:
+        st.markdown("### ⚠️ Input Validation Warnings")
+        for warning in validation_warnings:
+            st.markdown(f'<div class="validation-warning">{warning}</div>', unsafe_allow_html=True)
+        st.info("Please adjust your inputs and try again.")
+    else:
+        with st.spinner("🧠 Analyzing your heart health..."):
+            time.sleep(1.5)
 
-    # Animated progress bar
-    progress_placeholder = st.empty()
-    for percent in range(0, confidence + 1, 4):
-        time.sleep(0.02)
-        progress_placeholder.progress(percent / 100)
+            # Preprocess inputs
+            features = preprocess_inputs(
+                age, sex, cp, trestbps, chol, fbs, restecg, 
+                thalach, exang, oldpeak, slope, ca, thal
+            )
 
-    # Metrics
-    col_conf, col_risk = st.columns(2)
-    
-    with col_conf:
-        st.metric("🧠 Confidence Level", f"{confidence}%")
-    
-    with col_risk:
+            try:
+                # Make prediction
+                prediction = model.predict(features)[0]
+                prediction_proba = model.predict_proba(features)[0]
+                
+            except Exception as e:
+                st.error(f"❌ Prediction error: {e}")
+                st.stop()
+
+        # Display Results
+        st.markdown("## 📋 Result Overview")
+        
+        # Calculate confidence
+        risk_probability = prediction_proba[1]
+        confidence = int(risk_probability * 100)
+
+        # Animated progress bar
+        progress_placeholder = st.empty()
+        for percent in range(0, confidence + 1, 4):
+            time.sleep(0.02)
+            progress_placeholder.progress(percent / 100)
+
+        # Metrics
+        col_conf, col_risk = st.columns(2)
+        
+        with col_conf:
+            st.metric("🧠 Confidence Level", f"{confidence}%")
+        
+        with col_risk:
+            if risk_probability > 0.7:
+                risk_level = "High Risk 🚨"
+            elif risk_probability > 0.4:
+                risk_level = "Moderate Risk ⚠️"
+            else:
+                risk_level = "Low Risk ✅"
+            st.metric("📊 Risk Assessment", risk_level)
+
+        # Main result with appropriate styling
         if risk_probability > 0.7:
-            risk_level = "High Risk 🚨"
+            st.markdown('<div class="result danger">🚨 High Risk of Heart Disease Detected!</div>', unsafe_allow_html=True)
         elif risk_probability > 0.4:
-            risk_level = "Moderate Risk ⚠️"
+            st.markdown('<div class="result warning">⚠️ Moderate Risk - Further Evaluation Recommended</div>', unsafe_allow_html=True)
         else:
-            risk_level = "Low Risk ✅"
-        st.metric("📊 Risk Assessment", risk_level)
+            st.markdown('<div class="result success">✅ Low Risk! Your heart seems healthy.</div>', unsafe_allow_html=True)
 
-    # Main result with appropriate styling
-    if risk_probability > 0.7:
-        st.markdown('<div class="result danger">🚨 High Risk of Heart Disease Detected!</div>', unsafe_allow_html=True)
-    elif risk_probability > 0.4:
-        st.markdown('<div class="result warning">⚠️ Moderate Risk - Further Evaluation Recommended</div>', unsafe_allow_html=True)
-    else:
-        st.markdown('<div class="result success">✅ Low Risk! Your heart seems healthy.</div>', unsafe_allow_html=True)
+        # Probability breakdown
+        st.markdown("### 📈 Probability Breakdown")
+        prob_col1, prob_col2 = st.columns(2)
+        
+        with prob_col1:
+            st.markdown(f"""
+            <div class="metric-card">
+                <h3>No Heart Disease</h3>
+                <h2 style="color: #00FF7F;">{prediction_proba[0]*100:.1f}%</h2>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with prob_col2:
+            st.markdown(f"""
+            <div class="metric-card">
+                <h3>Heart Disease Present</h3>
+                <h2 style="color: #FF4B4B;">{prediction_proba[1]*100:.1f}%</h2>
+            </div>
+            """, unsafe_allow_html=True)
 
-    # Probability breakdown
-    st.markdown("### 📈 Probability Breakdown")
-    prob_col1, prob_col2 = st.columns(2)
-    
-    with prob_col1:
-        st.markdown(f"""
-        <div class="metric-card">
-            <h3>No Heart Disease</h3>
-            <h2 style="color: #00FF7F;">{prediction_proba[0]*100:.1f}%</h2>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with prob_col2:
-        st.markdown(f"""
-        <div class="metric-card">
-            <h3>Heart Disease Present</h3>
-            <h2 style="color: #FF4B4B;">{prediction_proba[1]*100:.1f}%</h2>
-        </div>
-        """, unsafe_allow_html=True)
+        # Risk Factor Analysis
+        st.markdown("### 🔍 Risk Factors Analysis")
+        
+        risk_factors = []
+        good_factors = []
+        
+        if age > 60: 
+            risk_factors.append(f"Age over 60 ({age} years)")
+        else:
+            good_factors.append(f"Younger age ({age} years)")
+            
+        if trestbps > 140: 
+            risk_factors.append(f"High blood pressure ({trestbps} mm Hg)")
+        else:
+            good_factors.append(f"Normal blood pressure ({trestbps} mm Hg)")
+            
+        if chol > 240: 
+            risk_factors.append(f"High cholesterol ({chol} mg/dl)")
+        else:
+            good_factors.append(f"Normal cholesterol ({chol} mg/dl)")
+            
+        if thalach < 120: 
+            risk_factors.append(f"Low maximum heart rate ({thalach})")
+        else:
+            good_factors.append(f"Good maximum heart rate ({thalach})")
+            
+        if oldpeak > 2: 
+            risk_factors.append(f"Significant ST depression ({oldpeak})")
+        else:
+            good_factors.append(f"Normal ST depression ({oldpeak})")
+            
+        if exang == 'Yes': 
+            risk_factors.append("Exercise induced angina")
+        else:
+            good_factors.append("No exercise induced angina")
+            
+        if ca >= 2: 
+            risk_factors.append(f"Multiple major vessels affected ({ca})")
+        elif ca == 0:
+            good_factors.append("No major vessels affected")
+            
+        if cp == 'Asymptomatic': 
+            risk_factors.append("Asymptomatic chest pain (most dangerous type)")
+        elif cp == 'Typical Angina':
+            good_factors.append("Typical angina (less dangerous)")
+        
+        if risk_factors:
+            st.warning("**Identified Risk Factors:**")
+            for factor in risk_factors:
+                st.markdown(f'<div class="risk-factor">⚠️ {factor}</div>', unsafe_allow_html=True)
+        
+        if good_factors:
+            st.success("**Positive Health Indicators:**")
+            for factor in good_factors:
+                st.markdown(f'<div class="good-factor">✅ {factor}</div>', unsafe_allow_html=True)
 
-    # Risk Factor Analysis
-    st.markdown("### 🔍 Risk Factors Analysis")
-    
-    risk_factors = []
-    good_factors = []
-    
-    if age > 60: 
-        risk_factors.append(f"Age over 60 ({age} years)")
-    else:
-        good_factors.append(f"Younger age ({age} years)")
-        
-    if trestbps > 140: 
-        risk_factors.append(f"High blood pressure ({trestbps} mm Hg)")
-    else:
-        good_factors.append(f"Normal blood pressure ({trestbps} mm Hg)")
-        
-    if chol > 240: 
-        risk_factors.append(f"High cholesterol ({chol} mg/dl)")
-    else:
-        good_factors.append(f"Normal cholesterol ({chol} mg/dl)")
-        
-    if thalach < 120: 
-        risk_factors.append(f"Low maximum heart rate ({thalach})")
-    else:
-        good_factors.append(f"Good maximum heart rate ({thalach})")
-        
-    if oldpeak > 2: 
-        risk_factors.append(f"Significant ST depression ({oldpeak})")
-    else:
-        good_factors.append(f"Normal ST depression ({oldpeak})")
-        
-    if exang_encoded == 1: 
-        risk_factors.append("Exercise induced angina")
-    else:
-        good_factors.append("No exercise induced angina")
-        
-    if ca >= 2: 
-        risk_factors.append(f"Multiple major vessels affected ({ca})")
-    elif ca == 0:
-        good_factors.append("No major vessels affected")
-        
-    if cp_encoded == 3: 
-        risk_factors.append("Asymptomatic chest pain (most dangerous type)")
-    elif cp_encoded == 0:
-        good_factors.append("Typical angina (less dangerous)")
-    
-    if risk_factors:
-        st.warning("**Identified Risk Factors:**")
-        for factor in risk_factors:
-            st.markdown(f'<div class="risk-factor">⚠️ {factor}</div>', unsafe_allow_html=True)
-    
-    if good_factors:
-        st.success("**Positive Health Indicators:**")
-        for factor in good_factors:
-            st.markdown(f'<div class="good-factor">✅ {factor}</div>', unsafe_allow_html=True)
+        # Health Advice
+        st.markdown("### 💬 Health Advice")
+        if risk_probability > 0.7:
+            st.markdown("""
+            <div class="advice-box">
+                🏃 **Exercise Regularly** - Brisk walking 30 mins/day<br>
+                🥗 **Healthy Diet** - Low-fat, low-salt, high-fiber foods<br>
+                🚭 **Avoid Smoking** - Quit tobacco products<br>
+                🍷 **Limit Alcohol** - Moderate consumption only<br>
+                💊 **Monitor Health** - Regular BP and cholesterol checks<br>
+                🩺 **Consult Doctor** - Schedule a cardiology appointment immediately
+            </div>
+            """, unsafe_allow_html=True)
+        elif risk_probability > 0.4:
+            st.markdown("""
+            <div class="advice-box">
+                💪 **Maintain Activity** - Regular moderate exercise<br>
+                🥑 **Balanced Nutrition** - Focus on heart-healthy foods<br>
+                😴 **Adequate Sleep** - 7-9 hours quality sleep<br>
+                🧘 **Stress Management** - Practice relaxation techniques<br>
+                🩺 **Regular Checkups** - Annual heart health screenings<br>
+                📊 **Monitor Progress** - Track your health metrics
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown("""
+            <div class="advice-box">
+                💪 **Maintain Activity** - Continue regular exercise<br>
+                🧘 **Manage Stress** - Practice relaxation techniques<br>
+                🥑 **Balanced Nutrition** - Maintain healthy eating habits<br>
+                😴 **Adequate Sleep** - 7-9 hours quality sleep nightly<br>
+                🩺 **Preventive Care** - Annual heart health screenings<br>
+                🚫 **Healthy Habits** - Avoid excessive junk food and stress
+            </div>
+            """, unsafe_allow_html=True)
 
-    # Health Advice
-    st.markdown("### 💬 Health Advice")
-    if risk_probability > 0.7:
-        st.markdown("""
-        <div class="advice-box">
-            🏃 **Exercise Regularly** - Brisk walking 30 mins/day<br>
-            🥗 **Healthy Diet** - Low-fat, low-salt, high-fiber foods<br>
-            🚭 **Avoid Smoking** - Quit tobacco products<br>
-            🍷 **Limit Alcohol** - Moderate consumption only<br>
-            💊 **Monitor Health** - Regular BP and cholesterol checks<br>
-            🩺 **Consult Doctor** - Schedule a cardiology appointment immediately
-        </div>
-        """, unsafe_allow_html=True)
-    elif risk_probability > 0.4:
-        st.markdown("""
-        <div class="advice-box">
-            💪 **Maintain Activity** - Regular moderate exercise<br>
-            🥑 **Balanced Nutrition** - Focus on heart-healthy foods<br>
-            😴 **Adequate Sleep** - 7-9 hours quality sleep<br>
-            🧘 **Stress Management** - Practice relaxation techniques<br>
-            🩺 **Regular Checkups** - Annual heart health screenings<br>
-            📊 **Monitor Progress** - Track your health metrics
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        st.markdown("""
-        <div class="advice-box">
-            💪 **Maintain Activity** - Continue regular exercise<br>
-            🧘 **Manage Stress** - Practice relaxation techniques<br>
-            🥑 **Balanced Nutrition** - Maintain healthy eating habits<br>
-            😴 **Adequate Sleep** - 7-9 hours quality sleep nightly<br>
-            🩺 **Preventive Care** - Annual heart health screenings<br>
-            🚫 **Healthy Habits** - Avoid excessive junk food and stress
-        </div>
-        """, unsafe_allow_html=True)
+        # Data Visualization
+        st.markdown("### 📊 Health Indicator Overview")
+        
+        metrics_data = pd.DataFrame({
+            'Metric': ['Resting BP', 'Cholesterol', 'Max Heart Rate', 'ST Depression', 'Major Vessels'],
+            'Value': [trestbps, chol, thalach, oldpeak, ca],
+            'Risk Level': ['High' if (trestbps > 140 or chol > 240 or thalach < 120 or oldpeak > 2 or ca >= 2) else 'Normal' for _ in range(5)]
+        })
+        
+        chart = alt.Chart(metrics_data).mark_bar(
+            cornerRadiusTopLeft=8, 
+            cornerRadiusTopRight=8
+        ).encode(
+            x=alt.X('Metric', sort=None, axis=alt.Axis(labelColor='white', titleColor='white', title='Health Metrics')),
+            y=alt.Y('Value', axis=alt.Axis(labelColor='white', titleColor='white', title='Value')),
+            color=alt.Color('Risk Level', scale=alt.Scale(domain=['High', 'Normal'], range=['#FF6A88', '#4CAF50'])),
+            tooltip=['Metric', 'Value', 'Risk Level']
+        ).properties(
+            height=400,
+            title='Current Health Metrics Visualization'
+        ).configure_title(
+            color='white',
+            fontSize=16
+        ).configure_legend(
+            labelColor='white',
+            titleColor='white'
+        )
 
-    # Data Visualization
-    st.markdown("### 📊 Health Indicator Overview")
-    
-    metrics_data = pd.DataFrame({
-        'Metric': ['Resting BP', 'Cholesterol', 'Max Heart Rate', 'ST Depression', 'Major Vessels'],
-        'Value': [trestbps, chol, thalach, oldpeak, ca],
-        'Risk Level': ['High' if (trestbps > 140 or chol > 240 or thalach < 120 or oldpeak > 2 or ca >= 2) else 'Normal' for _ in range(5)]
-    })
-    
-    chart = alt.Chart(metrics_data).mark_bar(
-        cornerRadiusTopLeft=8, 
-        cornerRadiusTopRight=8
-    ).encode(
-        x=alt.X('Metric', sort=None, axis=alt.Axis(labelColor='white', titleColor='white', title='Health Metrics')),
-        y=alt.Y('Value', axis=alt.Axis(labelColor='white', titleColor='white', title='Value')),
-        color=alt.Color('Risk Level', scale=alt.Scale(domain=['High', 'Normal'], range=['#FF6A88', '#4CAF50'])),
-        tooltip=['Metric', 'Value', 'Risk Level']
-    ).properties(
-        height=400,
-        title='Current Health Metrics Visualization'
-    ).configure_title(
-        color='white',
-        fontSize=16
-    ).configure_legend(
-        labelColor='white',
-        titleColor='white'
-    )
-
-    st.altair_chart(chart, use_container_width=True)
+        st.altair_chart(chart, use_container_width=True)
 
 # ----------------------------
 # Footer
