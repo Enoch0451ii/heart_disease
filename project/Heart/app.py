@@ -32,7 +32,7 @@ if 'age' not in st.session_state:
 def load_model():
     try:
         # Use relative path instead of absolute path
-        model_path = "heart_disease_model.pkl"
+        model_path = "project\Heart\heart_disease_model.pkl"
         if not os.path.exists(model_path):
             st.error("❌ Model file not found. Please ensure 'heart_disease_model.pkl' is in the same directory!")
             return None, None, None
