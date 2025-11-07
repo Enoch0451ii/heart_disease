@@ -13,14 +13,34 @@ import os
 @st.cache_resource
 def load_model():
     try:
+        # Debug: Check current directory and files
+        current_dir = os.getcwd()
+        
+        
+        # List files to see what's available
+        files = os.listdir('.')
+        
+        
+        # Check if file exists
+        if not os.path.exists('heart_model.joblib'):
+            st.error("❌ heart_model.joblib file not found!")
+            st.info("Available files:")
+            for file in files:
+                st.info(f" - {file}")
+            return None
+        
+        # Try to load the model
         model_data = joblib.load('heart_model.joblib')
-        st.sidebar.success("✅ Model loaded successfully!")
         return model_data
-    except Exception as e:
-        st.error(f"❌ Error loading model: {e}")
-        st.error("Please run train_model.py first to train the model.")
+        
+    except FileNotFoundError:
+        st.error("❌ Model file not found at 'heart_model.joblib'")
+        st.info("Make sure the file is in your GitHub repository and deployed correctly.")
         return None
-
+    except Exception as e:
+        st.error(f"❌ Error loading model: {str(e)}")
+        st.info("This might be a corrupted model file or missing dependencies.")
+        return None
 # Load model
 model_data = load_model()
 if model_data is None:
